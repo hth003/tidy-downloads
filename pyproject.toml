@@ -6,10 +6,12 @@ readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
     "pytest>=7.0.0",
+    "rumps>=0.4.0",
 ]
 
 [project.scripts]
 tidy-downloads = "tidy_downloads.cli:main"
+tidy-downloads-app = "tidy_downloads.app:main"
 
 [build-system]
 requires = ["hatchling"]
