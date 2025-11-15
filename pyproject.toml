@@ -1,0 +1,22 @@
+[project]
+name = "tidy-downloads"
+version = "0.1.0"
+description = "A lightweight macOS tool that automatically organizes your Downloads folder"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "pytest>=7.0.0",
+]
+
+[project.scripts]
+tidy-downloads = "tidy_downloads.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
