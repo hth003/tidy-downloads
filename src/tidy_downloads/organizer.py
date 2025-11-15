@@ -205,42 +205,103 @@ class FileOrganizer:
         except (IOError, OSError, PermissionError):
             return True
 
+    def _get_category_icon(self, category: str) -> str:
+        """
+        Get emoji icon for a file category.
+
+        Args:
+            category: Category name (e.g., "Documents", "Images")
+
+        Returns:
+            Emoji string representing the category
+        """
+        icons = {
+            'Installers': '📦',
+            'Documents': '📄',
+            'Images': '🖼️',
+            'Videos': '🎥',
+            'Audio': '🎵',
+            'Archives': '📦',
+            'Code': '💻',
+            'Other': '📎'
+        }
+        return icons.get(category, '📎')  # Default to paperclip for unknown categories
+
+    def _calculate_total_size(self, categorized_files: Dict[str, List[Path]]) -> int:
+        """
+        Calculate total size of all files across categories.
+
+        Args:
+            categorized_files: Dictionary of category -> list of file paths
+
+        Returns:
+            Total size in bytes
+        """
+        total_bytes = 0
+        for files in categorized_files.values():
+            for file_path in files:
+                try:
+                    total_bytes += file_path.stat().st_size
+                except (OSError, FileNotFoundError):
+                    # Skip files that can't be accessed
+                    continue
+        return total_bytes
+
     def get_organization_preview(self) -> str:
         """
         Get a human-readable preview of what will be organized.
 
         Returns:
-            Formatted string showing files grouped by category
+            Formatted string showing files grouped by category with icons and sizing info
         """
         categorized_files = self.scan_files(dry_run=True)
 
         if not categorized_files:
             return "No files to organize (all files are recent or in disabled categories)"
 
+        # Calculate totals
         total_files = sum(len(files) for files in categorized_files.values())
-        preview_lines = [f"\nPreview: {total_files} files will be organized\n"]
+        total_size = self._calculate_total_size(categorized_files)
+        total_size_str = self._format_file_size(total_size)
 
+        # Build summary header
+        preview_lines = [
+            "",
+            f"📊 Ready to organize {total_files} file{'s' if total_files != 1 else ''} (~{total_size_str})",
+            "",
+            "─" * 50,
+            ""
+        ]
+
+        # Add categories with icons
         for category in sorted(categorized_files.keys()):
             files = categorized_files[category]
             folder_name = self.config.get_destination_folder_name(category)
+            icon = self._get_category_icon(category)
 
-            preview_lines.append(f"{category} ({len(files)} files):")
-            preview_lines.append(f"  → {folder_name}/")
+            preview_lines.append(f"{icon} {category.upper()} ({len(files)} file{'s' if len(files) != 1 else ''} → {folder_name})")
 
             # Show first 5 files, then "..." if more
             for file_path in files[:5]:
                 file_size = file_path.stat().st_size
-                size_str = self._format_file_size(file_size) if file_size > 1024 * 1024 else ""
+                # Show size for files larger than 10MB (was 1MB)
+                size_str = self._format_file_size(file_size) if file_size > 10 * 1024 * 1024 else ""
 
                 if size_str:
-                    preview_lines.append(f"    • {file_path.name} ({size_str})")
+                    preview_lines.append(f"  • {file_path.name} ({size_str})")
                 else:
-                    preview_lines.append(f"    • {file_path.name}")
+                    preview_lines.append(f"  • {file_path.name}")
 
             if len(files) > 5:
-                preview_lines.append(f"    ... and {len(files) - 5} more")
+                preview_lines.append(f"  ... and {len(files) - 5} more")
 
-            preview_lines.append("")  # Blank line between categories
+            # Add visual separator between categories
+            preview_lines.append("")
+
+        # Add footer separator
+        preview_lines.append("─" * 50)
+        preview_lines.append(f"⏱️  All files are {self.config.get_minimum_file_age_days()}+ days old")
+        preview_lines.append("")
 
         return "\n".join(preview_lines)
 

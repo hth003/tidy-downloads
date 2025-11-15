@@ -156,15 +156,28 @@ class TestFileOrganizer:
         assert (docs_folder / "old_document_2.pdf").exists()
 
     def test_get_organization_preview(self, setup_config):
-        """Test preview generation."""
+        """Test preview generation with enhanced formatting."""
         organizer = FileOrganizer(setup_config)
         preview = organizer.get_organization_preview()
 
-        assert "Preview:" in preview
-        assert "Documents" in preview
-        assert "Images" in preview
-        assert "Installers" in preview
+        # Check for enhanced preview header with summary
+        assert "📊 Ready to organize" in preview
+        assert "files" in preview
+
+        # Check for visual separators
+        assert "──" in preview
+
+        # Check for category icons and names
+        assert "📄 DOCUMENTS" in preview
+        assert "🖼️ IMAGES" in preview
+        assert "📦 INSTALLERS" in preview
+
+        # Check for file listing
         assert "old_document.pdf" in preview
+
+        # Check for footer with file age info
+        assert "⏱️" in preview
+        assert "days old" in preview
 
     def test_get_stats(self, setup_config):
         """Test statistics generation."""
@@ -210,3 +223,57 @@ class TestFileOrganizer:
         assert organizer._format_file_size(1500) == "1 KB"
         assert organizer._format_file_size(1500000) == "1 MB"
         assert organizer._format_file_size(1500000000) == "1 GB"
+
+    def test_get_category_icon(self, setup_config):
+        """Test category icon mapping."""
+        organizer = FileOrganizer(setup_config)
+
+        # Test all known categories have icons
+        assert organizer._get_category_icon('Installers') == '📦'
+        assert organizer._get_category_icon('Documents') == '📄'
+        assert organizer._get_category_icon('Images') == '🖼️'
+        assert organizer._get_category_icon('Videos') == '🎥'
+        assert organizer._get_category_icon('Audio') == '🎵'
+        assert organizer._get_category_icon('Archives') == '📦'
+        assert organizer._get_category_icon('Code') == '💻'
+        assert organizer._get_category_icon('Other') == '📎'
+
+        # Test unknown category returns default
+        assert organizer._get_category_icon('Unknown') == '📎'
+
+    def test_calculate_total_size(self, setup_config, tmp_path):
+        """Test total size calculation across categories."""
+        # Create test files with known sizes
+        downloads_path = tmp_path / "Downloads"
+        downloads_path.mkdir(exist_ok=True)  # May already exist from fixture
+
+        # Create files with specific content sizes
+        file1 = downloads_path / "test1.pdf"
+        file1.write_text("a" * 1000)  # 1000 bytes
+
+        file2 = downloads_path / "test2.jpg"
+        file2.write_text("b" * 2000)  # 2000 bytes
+
+        file3 = downloads_path / "test3.dmg"
+        file3.write_text("c" * 500)  # 500 bytes
+
+        # Make files old enough to organize
+        old_time = (datetime.now() - timedelta(days=10)).timestamp()
+        import os
+        os.utime(file1, (old_time, old_time))
+        os.utime(file2, (old_time, old_time))
+        os.utime(file3, (old_time, old_time))
+
+        organizer = FileOrganizer(setup_config)
+        categorized_files = organizer.scan_files(dry_run=True)
+
+        total_size = organizer._calculate_total_size(categorized_files)
+
+        # Should include at least our 3 files (3500 bytes)
+        # May include fixture files too, so check it's at least what we expect
+        assert total_size >= 3500
+
+        # Verify it's calculating correctly by checking individual file sizes
+        all_files = [f for files in categorized_files.values() for f in files]
+        manual_total = sum(f.stat().st_size for f in all_files)
+        assert total_size == manual_total  # Should match manual calculation

@@ -56,6 +56,7 @@ class TidyDownloadsApp(rumps.App):
             "Preview Organization",
             "Undo Last Operation",
             None,  # Separator
+            "Preferences...",
             "Show Configuration",
             "Show Statistics",
             None,  # Separator
@@ -214,22 +215,198 @@ class TidyDownloadsApp(rumps.App):
                 ok="OK"
             )
 
+    @rumps.clicked("Preferences...")
+    def show_preferences(self, _):
+        """Open streamlined preferences dialog for editing settings."""
+        try:
+            # Get current settings
+            current_age = self.config.get_minimum_file_age_days()
+            current_categories = set(self.config.get_enabled_categories())
+            current_notifications = self.config.get("send_notifications", True)
+
+            # All available categories
+            all_categories = ["Installers", "Documents", "Images", "Videos", "Audio", "Archives", "Code", "Other"]
+
+            # Step 1: Edit minimum file age
+            window = rumps.Window(
+                title="Minimum File Age",
+                message=f"Only organize files older than how many days?\n\nCurrent: {current_age} days\nEnter a value between 1 and 30:",
+                default_text=str(current_age),
+                dimensions=(280, 24)
+            )
+            response = window.run()
+
+            if not response.clicked:
+                return  # User cancelled
+
+            # Validate age input
+            try:
+                new_age = int(response.text)
+                if new_age < 1 or new_age > 30:
+                    rumps.alert(
+                        title="Invalid Input",
+                        message="File age must be between 1 and 30 days.",
+                        ok="OK"
+                    )
+                    return
+            except ValueError:
+                rumps.alert(
+                    title="Invalid Input",
+                    message="Please enter a valid number.",
+                    ok="OK"
+                )
+                return
+
+            # Step 2: Edit ALL categories in ONE dialog
+            category_list = ""
+            for i, cat in enumerate(all_categories, 1):
+                icon = self.organizer._get_category_icon(cat)
+                status = "✓" if cat in current_categories else "✗"
+                category_list += f"{i}. {icon} {cat} {status}\n"
+
+            currently_enabled = ", ".join([str(i+1) for i, cat in enumerate(all_categories) if cat in current_categories])
+
+            window = rumps.Window(
+                title="Enable Categories",
+                message=f"Select which categories to organize:\n\n{category_list}\nCurrently enabled: {currently_enabled}\n\nEnter numbers (e.g., 1,2,3,5) or 'all':",
+                default_text=currently_enabled,
+                dimensions=(320, 24)
+            )
+            response = window.run()
+
+            if not response.clicked:
+                return  # User cancelled
+
+            # Parse category selection
+            try:
+                new_categories = set()
+                user_input = response.text.strip().lower()
+
+                if user_input == "all":
+                    new_categories = set(all_categories)
+                else:
+                    # Parse comma-separated numbers
+                    selected_numbers = [int(n.strip()) for n in user_input.split(",") if n.strip()]
+                    for num in selected_numbers:
+                        if 1 <= num <= len(all_categories):
+                            new_categories.add(all_categories[num - 1])
+                        else:
+                            rumps.alert(
+                                title="Invalid Input",
+                                message=f"Number {num} is out of range (1-{len(all_categories)}).",
+                                ok="OK"
+                            )
+                            return
+
+                # Validate at least one category is enabled
+                if not new_categories:
+                    rumps.alert(
+                        title="No Categories Selected",
+                        message="You must enable at least one category.\n\nPreferences not saved.",
+                        ok="OK"
+                    )
+                    return
+
+            except ValueError:
+                rumps.alert(
+                    title="Invalid Input",
+                    message="Please enter numbers separated by commas (e.g., 1,2,3) or 'all'.",
+                    ok="OK"
+                )
+                return
+
+            # Step 3: Edit notifications
+            notif_status = "✓ Enabled" if current_notifications else "✗ Disabled"
+            response = rumps.alert(
+                title="Notifications",
+                message=f"Current status: {notif_status}\n\nShow notifications after organizing?",
+                ok="Enable",
+                cancel="Disable"
+            )
+            new_notifications = (response == 1)
+
+            # Step 4: Show summary and confirm
+            summary = f"""Review your changes:
+
+Minimum File Age: {current_age} → {new_age} days
+
+Enabled Categories: {len(new_categories)} of {len(all_categories)}
+"""
+            for cat in sorted(all_categories):
+                was_enabled = cat in current_categories
+                is_enabled = cat in new_categories
+                if was_enabled == is_enabled:
+                    status = "  ✓" if is_enabled else "  ✗"
+                elif is_enabled:
+                    status = "  ✓ (NEW)"
+                else:
+                    status = "  ✗ (REMOVED)"
+                summary += f"{status} {cat}\n"
+
+            summary += f"\nNotifications: "
+            if current_notifications == new_notifications:
+                summary += "✓ Enabled" if new_notifications else "✗ Disabled"
+            elif new_notifications:
+                summary += "✓ Enabled (changed)"
+            else:
+                summary += "✗ Disabled (changed)"
+
+            response = rumps.alert(
+                title="Save Preferences?",
+                message=summary,
+                ok="Save",
+                cancel="Cancel"
+            )
+
+            if response == 0:  # User cancelled
+                return
+
+            # Save changes
+            self.config.set("minimum_file_age_days", new_age)
+            self.config.set("enabled_categories", list(new_categories))
+            self.config.set("send_notifications", new_notifications)
+
+            logger.info(f"Preferences updated: age={new_age}, categories={new_categories}, notifications={new_notifications}")
+
+            # Show success notification
+            rumps.notification(
+                title="Preferences Saved",
+                subtitle="Settings updated successfully",
+                message=f"File age: {new_age} days | Categories: {len(new_categories)} enabled"
+            )
+
+            # Update status to reflect potential changes
+            self.update_status(None)
+
+        except Exception as e:
+            logger.error(f"Error in preferences dialog: {e}", exc_info=True)
+            rumps.alert(
+                title="Preferences Error",
+                message=f"Could not save preferences: {str(e)}",
+                ok="OK"
+            )
+
     @rumps.clicked("Show Configuration")
     def show_configuration(self, _):
-        """Display current configuration."""
+        """Display current configuration (read-only)."""
         try:
             config_dict = self.config.to_dict()
 
             # Build configuration display
             config_text = f"""Downloads Path: {config_dict['downloads_path']}
 Minimum File Age: {config_dict['minimum_file_age_days']} days
-Notifications: {'Enabled' if config_dict['send_notifications'] else 'Disabled'}
+Notifications: {'✓ Enabled' if config_dict['send_notifications'] else '✗ Disabled'}
 
-Enabled Categories:
+Enabled Categories ({len(config_dict['enabled_categories'])} of 8):
 """
-            for category in config_dict['enabled_categories']:
-                folder_name = self.config.get_destination_folder_name(category)
-                config_text += f"  • {category} → {folder_name}/\n"
+            all_categories = ["Installers", "Documents", "Images", "Videos", "Audio", "Archives", "Code", "Other"]
+            for cat in all_categories:
+                icon = self.organizer._get_category_icon(cat)
+                if cat in config_dict['enabled_categories']:
+                    folder_name = self.config.get_destination_folder_name(cat)
+                    config_text += f"  ✓ {icon} {cat} → {folder_name}/\n"
+                else:
+                    config_text += f"  ✗ {icon} {cat}\n"
 
             config_text += f"\nConfig file: {self.config.config_path}"
 

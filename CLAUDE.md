@@ -62,6 +62,61 @@ uv sync
 uv add <package-name>
 ```
 
+## Phase 2 Features (NEW)
+
+### Enhanced Preview UI
+The preview now includes visual enhancements for better readability:
+- **Summary header** showing total files and total size
+- **Category icons** (📦 Installers, 📄 Documents, 🖼️ Images, etc.)
+- **Visual separators** for clear section breaks
+- **Smart file size display** (only shows sizes for files > 10MB)
+- **Footer with file age** confirmation
+
+Example preview output:
+```
+📊 Ready to organize 47 files (~982 MB)
+
+──────────────────────────────────────────────────
+
+📦 INSTALLERS (12 files → ~Documents)
+  • Chrome_Installer.dmg (152 MB)
+  • Sketch_v94.dmg (89 MB)
+  ... and 10 more
+
+📄 DOCUMENTS (18 files → ~Documents)
+  • Q4_Report_Final.pdf (12 MB)
+  • Meeting_Notes.docx
+  ... and 16 more
+
+──────────────────────────────────────────────────
+⏱️  All files are 7+ days old
+```
+
+### Preferences Management
+The menu bar app includes two menu items for configuration:
+
+**Show Configuration** (read-only viewer):
+- Quick view of all current settings
+- Shows enabled/disabled status for all 8 categories with icons
+- Displays file age threshold and notification status
+- No editing - just for quick reference
+
+**Preferences...** (streamlined editor):
+- **Step 1**: Edit minimum file age (1-30 days) with validation
+- **Step 2**: **Select ALL categories in ONE dialog** - Enter numbers (e.g., "1,2,3,5") or type "all"
+- **Step 3**: Toggle notifications on/off
+- **Step 4**: Review all changes with before/after comparison
+- **Validation**: Ensures at least one category remains enabled
+- **Auto-save**: Changes persist immediately to config.json
+- **Status update**: Menu bar status refreshes after preference changes
+
+**Category Selection Format:**
+- `1,2,3,5` - Enable specific categories by number
+- `all` - Enable all 8 categories
+- `1,2,3,4,5,6,7,8` - Same as "all"
+
+Users no longer need to manually edit the config.json file.
+
 ## Key Architecture Details
 
 ### File Organization Flow
